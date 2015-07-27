@@ -1,5 +1,5 @@
 ; assemble with ACME
-!to "bf6502",plain
+!to "bf1",plain
 !CPU 6502
 *=$300
 
@@ -8,7 +8,7 @@
 ; Platform: Apple ][ //e
 ; By: Peter Ferrie
 ; Date: Jul, 2015
-; Description: 159 Byte Interpreter of BrainFuck
+; Description: 152 Byte Interpreter of BrainFuck
 ; License: BSD "Sharing is Caring!"
 ; Inspired by Michael Pohoreski's 187 Byte version
 ;
@@ -81,7 +81,6 @@ COUT            =        $FDED ; trashes A, Y
 
         STY BFPC        ; 84 3C    ;
         STY DATA        ; 84 40    ;
-;       STY CUR_DEPTH   ; 84 EE    ; Optional, but introduces risk of overflow if absent
 ; Code needs to end with a zero byte 
 ; DEFAULT:  $60/$20 for   big code ($6000..$BFFF = 24K) / medium data ($2000..$5FFF = 16K)
 ; Optional: $08/$10 for small code ($0800..$0FFF =  2K) / large  data ($1000..$BFFF = 44K)
@@ -122,27 +121,25 @@ BF_IF                   ;          ; if( *pData == 0 ) pc = ']'
         INC CUR_DEPTH   ; E6 EE    ; *** depth++
         TXA             ; 8A       ; optimization: common code
         BNE EXIT        ; D0 FA    ; optimization: BEQ .1, therefore BNE RTS
-        LDX CUR_DEPTH   ; A6 EE    ; match_depth = depth
-        DEX             ; CA       ;
 INC_BRACKET
         INX             ; E8       ; *** inc stack
 -                                  ; Sub-Total Bytes #101
-        JSR NXTA1+8     ; 20 C2 FC ; optimization: INC A1L, BNE +2, INC A1H, RTS
+        JSR NXTA1_8     ; 20 C2 FC ; optimization: INC A1L, BNE +2, INC A1H, RTS
         LDA (BFPC), Y   ; B1 3C    ;
         CMP #'['        ; C9 5B    ; ***
         BEQ INC_BRACKET ; F0 F6    ;
         CMP #']'        ; C9 5D    ; ***
         BNE -           ; D0 F3    ;
-        CPX CUR_DEPTH   ; E4 EE    ;
-        BEQ EXIT        ; F0 E5    ;
         DEX             ; CA       ; *** dec stack
-        BNE -           ; D0 EC    ;
+        BNE -           ; D0 F0    ;
+        BEQ EXIT        ; F0 E7    ;
 BF_FI                   ;          ; if( *pData != 0 ) pc = '['
         DEC CUR_DEPTH   ; C6 EE    ; depth--
-        TXA             ; 8A       ;
-        BEQ EXIT        ; F0 DD    ; optimization: BNE .1, therefore BEQ RTS
+        INY             ; C8       ; compensate for unconditional NXTA1_8
         LDX CUR_DEPTH   ; A6 EE    ; match_depth = depth
+--
         INX             ; E8       ;
+        INX             ; E8       ; *** inc stack
 DEC_BRACKET
         DEX             ; CA       ; *** dec stack
 -
@@ -158,9 +155,8 @@ DEC_BRACKET
         CMP #'['        ; C9 5B    ;
         BNE -           ; D0 EE    ;
         CPX CUR_DEPTH   ; E4 EE    ;
-        BEQ EXIT        ; F0 C3    ;
-        INX             ; E8       ; *** inc stack
-        BNE -           ; D0 E7    ;
+        BNE --          ; D0 E7    ;
+        BEQ EXIT        ; F0 C7    ;
 BF_IN
         JSR RDKEY       ; 20 0C FD ; trashes Y
 BF_OUT
@@ -169,7 +165,7 @@ BF_OUT
         BPL STORE_DATA  ; 10 13    ; always for input
         JMP COUT        ; 4C ED FD ; trashes A, Y
 BF_NEXT
-        JMP STOR+6      ; 4C 11 FE ; optimization: INC A3L, BNE +2, INC A3H, RTS
+        JMP STOR_6      ; 4C 11 FE ; optimization: INC A3L, BNE +2, INC A3H, RTS
 BF_PREV
         LDA DATA        ; A5 40    ;
         BNE +           ; D0 02    ;
@@ -199,3 +195,4 @@ OPFUNCPTR               ;          ; by usage: least commonly called to most
         !byte <BF_DEC -1; 46       ; -
         !byte <BF_INC -1; 43       ; +
 }
+
