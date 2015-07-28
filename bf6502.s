@@ -1,5 +1,5 @@
 ; assemble with ACME
-!to "bf1",plain
+!to "bf6502",plain
 !CPU 6502
 *=$300
 
@@ -8,7 +8,7 @@
 ; Platform: Apple ][ //e
 ; By: Peter Ferrie
 ; Date: Jul, 2015
-; Description: 152 Byte Interpreter of BrainFuck
+; Description: 144 Byte Interpreter of BrainFuck
 ; License: BSD "Sharing is Caring!"
 ; Inspired by Michael Pohoreski's 187 Byte version
 ;
@@ -41,9 +41,6 @@
 
 OPCODE          =        $F0   ; Applesoft SPEED @ $F1, Flash mask $F3
 OPFUNCPTR       =        $F8   ; Applesoft ROT @ $F9
-                                 ; Applesoft Free soace $EB .. $EF
-CUR_DEPTH       =        $EE   ; // current nested depth
-NUM_BRACKET     =        $EF   ; // depth to find[]
 
 BFPC            =        $3C   ; BFPC/pCode same as A1L/H
 DATA            =        $40   ; DATA/pData same as A3L/H
@@ -62,7 +59,6 @@ STOR_6          =        $FE11 ; standard entry point is STOR = $FE0B
 CLRTEXT         =        $C050
 SETTEXT         =        $C051
 
-RDKEY           =        $FD0C
 COUT            =        $FDED ; trashes A, Y
 
 ; Used to read start address of $0806 = first Applesoft token
@@ -98,32 +94,28 @@ FETCH
         LDY #$00        ; A0 00    ; because COUT trashes Y
         BEQ FETCH       ; F0 F2    ; branch always
 INTERPRET
-
-        LDX #$07        ; A2 07    ; 8 Instructions
+        LDX #$08        ; A2 08    ; 8 Instructions
+NEXT
+        DEX             ; CA       ;
+        BMI EXIT        ; 30 0D    ;
 FIND_OP
         CMP OPCODE,X    ; D5 F0    ; table of opcodes (char)
-        BNE NEXT        ; D0 06    ; ignore non-tokens, allows for comments
+        BNE NEXT        ; D0 F9    ; ignore non-tokens, allows for comments
         LDA #$03        ; A9 03    ; high byte of this code address
         PHA             ; 48       ;
         LDA OPFUNCPTR,X ; B5 F8    ; function pointer table (address)
         PHA             ; 48       ;
-NEXT
-        DEX             ; CA       ;
-        BPL FIND_OP     ; 10 F3    ;
         LDA (DATA),Y    ; B1 40    ; optimization: common code
         TAX             ; AA       ; cache value
 EXIT
         RTS             ; 60       ; 1) exit to caller,
                                    ; 2) relative jsr to our bf_*(), or
                                    ; 3) exit our bf_*()
-
 BF_IF                   ;          ; if( *pData == 0 ) pc = ']'
-        INC CUR_DEPTH   ; E6 EE    ; *** depth++
-        TXA             ; 8A       ; optimization: common code
-        BNE EXIT        ; D0 FA    ; optimization: BEQ .1, therefore BNE RTS
+        BNE EXIT        ; D0 FD    ; optimization: BEQ .1, therefore BNE RTS
 INC_BRACKET
         INX             ; E8       ; *** inc stack
--                                  ; Sub-Total Bytes #101
+-                       ;          ;
         JSR NXTA1_8     ; 20 C2 FC ; optimization: INC A1L, BNE +2, INC A1H, RTS
         LDA (BFPC), Y   ; B1 3C    ;
         CMP #'['        ; C9 5B    ; ***
@@ -132,31 +124,26 @@ INC_BRACKET
         BNE -           ; D0 F3    ;
         DEX             ; CA       ; *** dec stack
         BNE -           ; D0 F0    ;
-        BEQ EXIT        ; F0 E7    ;
+        BEQ EXIT        ; F0 EA    ;
 BF_FI                   ;          ; if( *pData != 0 ) pc = '['
-        DEC CUR_DEPTH   ; C6 EE    ; depth--
+        LDX #$01        ; A2 01    ; starting point
         INY             ; C8       ; compensate for unconditional NXTA1_8
-        LDX CUR_DEPTH   ; A6 EE    ; match_depth = depth
---
-        INX             ; E8       ;
-        INX             ; E8       ; *** inc stack
 DEC_BRACKET
         DEX             ; CA       ; *** dec stack
--
+-                       ;          ;
         LDA BFPC        ; A5 3C    ;
         BNE +           ; D0 02    ;
         DEC BFPC+1      ; C6 3D    ;
-+
++                       ;          ;
         DEC BFPC        ; C6 3C    ;
-
         LDA (BFPC),Y    ; B1 3C    ;
-        CMP #']'        ; C9 5D    ;
+        CMP #']'        ; C9 5D    ; ***
         BEQ DEC_BRACKET ; F0 F1    ;
-        CMP #'['        ; C9 5B    ;
+        CMP #'['        ; C9 5B    ; ***
         BNE -           ; D0 EE    ;
-        CPX CUR_DEPTH   ; E4 EE    ;
-        BNE --          ; D0 E7    ;
-        BEQ EXIT        ; F0 C7    ;
+        INX             ; E8       ; *** inc stack
+        BNE -           ; D0 EB    ;
+        BEQ EXIT        ; F0 CF    ;
 BF_IN
         JSR RDKEY       ; 20 0C FD ; trashes Y
 BF_OUT
@@ -170,7 +157,7 @@ BF_PREV
         LDA DATA        ; A5 40    ;
         BNE +           ; D0 02    ;
         DEC DATA+1      ; C6 41    ;
-+
++                       ;          ;
         DEC DATA        ; C6 40    ;
         RTS             ; 60       ;
 BF_INC
@@ -195,4 +182,3 @@ OPFUNCPTR               ;          ; by usage: least commonly called to most
         !byte <BF_DEC -1; 46       ; -
         !byte <BF_INC -1; 43       ; +
 }
-
